@@ -14,7 +14,6 @@ class Shell {
     int cmdLength;
     TaskManager* taskManager;
 
-    void prompt();
     void execute();
 
     // Command handlers
@@ -30,6 +29,8 @@ class Shell {
 
 public:
     Shell(TaskManager* tm);
+
+    void prompt();
 
     // Called from the main kernel loop — processes one character at a time
     void update();

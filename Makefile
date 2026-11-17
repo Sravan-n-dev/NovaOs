@@ -32,7 +32,7 @@ novaos.iso: build/novaos.bin grub/grub.cfg
 	mkdir -p iso/boot/grub
 	cp build/novaos.bin iso/boot/
 	cp grub/grub.cfg iso/boot/grub/
-	grub-mkrescue -o $@ iso 2>/dev/null
+	grub-mkrescue -o $@ iso
 
 run: novaos.iso
 	qemu-system-i386 -cdrom novaos.iso -m 64M
@@ -42,6 +42,6 @@ debug: novaos.iso
 	gdb build/novaos.bin -ex "target remote localhost:1234"
 
 clean:
-	rm -rf build iso novaos.iso
+	rm -rf build iso novaos.iso artifacts
 
 .PHONY: run debug clean
