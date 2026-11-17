@@ -1,5 +1,6 @@
 GPPFLAGS = -m32 -ffreestanding -fno-use-cxa-atexit -fno-exceptions -fno-rtti \
-           -fno-leading-underscore -fno-stack-protector -fno-pie -Wall -Wextra
+           -fno-leading-underscore -fno-stack-protector -fno-pie -Wall -Wextra \
+           -Isrc
 ASFLAGS  = --32
 LDFLAGS  = -melf_i386 -T linker.ld
 
@@ -8,6 +9,11 @@ objects = build/loader.o \
           build/gdt.o \
           build/port.o \
           build/interrupts.o \
+          build/console.o \
+          build/keyboard.o \
+          build/timer.o \
+          build/multitasking.o \
+          build/shell.o \
           build/kernel.o
 
 build/%.o: src/%.cpp

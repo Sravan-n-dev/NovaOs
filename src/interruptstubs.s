@@ -1,4 +1,5 @@
 # Assembly interrupt entry stubs for NovaOS
+# Matches C++ mangled names from InterruptManager with -fno-leading-underscore
 
 .set IRQ_BASE, 0x20
 
@@ -14,30 +15,34 @@ _ZN16InterruptManager15InterruptIgnoreEv:
 
 .section .text
 
+# HandleException0x## -> method name is 19 chars (HandleException + 0x##)
+# Mangled: _ZN16InterruptManager19HandleException0x##Ev
 .macro HandleException num
-.global _ZN16InterruptManager16HandleException\num\()Ev
-_ZN16InterruptManager16HandleException\num\()Ev:
+.global _ZN16InterruptManager19HandleException\num\()Ev
+_ZN16InterruptManager19HandleException\num\()Ev:
     movb $\num, (interruptNumber)
     pushl $0
     jmp int_bottom
 .endm
 
 .macro HandleExceptionWithError num
-.global _ZN16InterruptManager16HandleException\num\()Ev
-_ZN16InterruptManager16HandleException\num\()Ev:
+.global _ZN16InterruptManager19HandleException\num\()Ev
+_ZN16InterruptManager19HandleException\num\()Ev:
     movb $\num, (interruptNumber)
     jmp int_bottom
 .endm
 
+# HandleInterruptRequest0x## -> method name is 26 chars
+# Mangled: _ZN16InterruptManager26HandleInterruptRequest0x##Ev
 .macro HandleInterruptRequest num
-.global _ZN16InterruptManager23HandleInterruptRequest\num\()Ev
-_ZN16InterruptManager23HandleInterruptRequest\num\()Ev:
+.global _ZN16InterruptManager26HandleInterruptRequest\num\()Ev
+_ZN16InterruptManager26HandleInterruptRequest\num\()Ev:
     movb $\num + IRQ_BASE, (interruptNumber)
     pushl $0
     jmp int_bottom
 .endm
 
-# CPU Exceptions
+# CPU Exceptions 0x00 - 0x13
 HandleException 0x00
 HandleException 0x01
 HandleException 0x02
@@ -59,7 +64,7 @@ HandleExceptionWithError 0x11
 HandleException 0x12
 HandleException 0x13
 
-# Hardware IRQs (0x00 - 0x0F)
+# Hardware IRQs 0x00 - 0x0F
 HandleInterruptRequest 0x00
 HandleInterruptRequest 0x01
 HandleInterruptRequest 0x02
@@ -78,19 +83,22 @@ HandleInterruptRequest 0x0E
 HandleInterruptRequest 0x0F
 
 int_bottom:
-    # Save all general registers
+    # Save all general-purpose registers
     pusha
-    # Save data segment registers
+    # Save segment registers
     pushl %ds
     pushl %es
     pushl %fs
     pushl %gs
 
-    # Call C++ InterruptManager::HandleInterrupt(uint8_t interrupt, uint32_t esp)
+    # Call C++ handler: InterruptManager::HandleInterrupt(uint8_t, uint32_t)
+    # arg2 = esp (current stack pointer = pointer to saved context)
+    # arg1 = interrupt number
     pushl %esp
     pushl (interruptNumber)
     call _ZN16InterruptManager15HandleInterruptEhj
-    # Returned %eax is the (potentially updated) stack pointer for multitasking!
+    # Return value in %eax is the (potentially new) stack pointer
+    # This is the key mechanism for preemptive multitasking!
     movl %eax, %esp
 
     # Restore segment registers
@@ -98,8 +106,8 @@ int_bottom:
     popl %fs
     popl %es
     popl %ds
-    # Restore general registers
+    # Restore general-purpose registers
     popa
-    # Skip error code and interrupt number
+    # Skip the error code / dummy value that was pushed
     add $4, %esp
     iret
