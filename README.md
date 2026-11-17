@@ -2,100 +2,100 @@
 
 **A Minimal 32-bit x86 Operating System with Interactive Shell and Preemptive Multitasking**
 
-NovaOS is a genuine educational operating system built from scratch following the incremental development methodology of the "Write your own Operating System" (WYOOS) tutorial series.
+NovaOS is an educational operating system built from bare metal following the incremental development methodology of the "Write your own Operating System" (WYOOS) tutorial series.
+
+---
+
+## Live QEMU Demonstration
+
+### 1. Boot & Subsystem Bringup
+The kernel verifies the Multiboot header, sets up the GDT, remaps the dual 8259 PIC, configures the 100 Hz PIT timer, initializes the PS/2 keyboard, and launches three automatic background tasks.
+
+![NovaOS Boot](docs/screenshots/screenshot_boot.png)
+
+### 2. Task Inspection & Real Preemptive Context Switching
+The `tasks` command reads real kernel Task Control Blocks (TCBs), showing live task execution states and rapidly incrementing CPU context-switch counts.
+
+![NovaOS Tasks](docs/screenshots/screenshot_tasks.png)
+
+### 3. Dynamic Task Creation & Scheduling
+Typing `start` dynamically allocates and initializes a new kernel task with an isolated 4 KiB stack, which is immediately scheduled into the Round-Robin ring.
+
+![NovaOS Start Task](docs/screenshots/screenshot_start.png)
+
+### 4. System Diagnostics & Hardware Uptime
+The `info` and `uptime` commands display live system telemetry derived from actual PIT hardware ticks.
+
+![NovaOS Uptime](docs/screenshots/screenshot_uptime.png)
+
+---
 
 ## Features
 
-- **Real Preemptive Multitasking**: Timer-driven Round-Robin CPU context switching with independent task stacks
-- **Interactive Shell**: Type commands to inspect tasks, create new tasks, and view system info
-- **PS/2 Keyboard Driver**: Interrupt-driven keyboard input with scancode translation
-- **PIT Timer**: 100 Hz Programmable Interval Timer driving the scheduler
-- **Full Interrupt Infrastructure**: GDT, IDT, 8259 PIC remapping, assembly interrupt stubs
+- **Genuine Preemptive Multitasking**: Hardware timer-driven Round-Robin CPU context switching via stack pointer exchange (`movl %eax, %esp` in `interruptstubs.s`).
+- **Independent Task Stacks**: Each task executes in an isolated 4 KiB kernel stack.
+- **Dynamic Task Creation**: The shell dynamically initializes new task contexts and enqueues them into the scheduler.
+- **Interactive Shell**: Non-blocking keyboard buffer providing commands (`help`, `info`, `tasks`, `start`, `uptime`, `clear`).
+- **Hardware Abstraction**: GDT flat model (Ring 0), dual 8259 PIC cascading, 256 IDT gates, 8254 PIT (Mode 2), 80x25 text VGA driver.
 
-## Quick Start (Ubuntu 24.04)
+---
+
+## Quick Start (Ubuntu 24.04 LTS / Debian)
 
 ```bash
-# Install dependencies
+# 1. Install toolchain dependencies & QEMU
 sudo apt update
 sudo apt install -y build-essential g++-multilib make grub-pc-bin grub-common \
      xorriso mtools qemu-system-x86 gdb
 
-# Build
+# 2. Build bootable ISO
 make clean
 make novaos.iso
 
-# Run in QEMU
+# 3. Boot in QEMU
 make run
 
-# Debug with GDB
-make debug
+# 4. Run automated test & capture screenshots
+python3 scripts/qemu_test.py
 ```
+
+---
 
 ## Shell Commands
 
-| Command  | Description                              |
-|----------|------------------------------------------|
-| `help`   | List available commands                  |
-| `info`   | Display system architecture information  |
-| `tasks`  | Show all tasks with states and IDs       |
-| `start`  | Create a new kernel task                 |
-| `uptime` | Display uptime from real PIT tick count  |
-| `clear`  | Clear the VGA screen                     |
+| Command  | Description |
+|----------|-------------|
+| `help`   | Display available commands |
+| `info`   | Show CPU mode, timer status, scheduler state |
+| `tasks`  | Show live TCB status, active task IDs, and context-switch count |
+| `start`  | Dynamically allocate and schedule a new kernel task |
+| `uptime` | Display elapsed time calculated from hardware PIT ticks |
+| `clear`  | Clear the VGA display terminal |
 
-## Architecture
-
-```
-GRUB Multiboot → loader.s → kernelMain()
-                                ├── GDT (flat 4GB code+data segments)
-                                ├── IDT + PIC (256 interrupt gates, 8259 remap)
-                                ├── Keyboard Driver (IRQ1, scancode→ASCII)
-                                ├── PIT Timer (IRQ0, 100Hz)
-                                ├── Task Manager (Round-Robin scheduler)
-                                │     ├── Boot/Shell task (slot 0)
-                                │     ├── Task A (auto-created)
-                                │     ├── Task B (auto-created)
-                                │     └── Task C (auto-created)
-                                └── Interactive Shell
-```
+---
 
 ## Project Structure
 
 ```
 src/
-  loader.s          - Multiboot header, stack, entry point
-  interruptstubs.s  - Assembly interrupt stubs (register save/restore, iret)
-  types.h           - Fixed-width integer types
-  gdt.h/cpp         - Global Descriptor Table
-  port.h/cpp        - Hardware I/O port classes
-  interrupts.h/cpp  - IDT, PIC, interrupt dispatching
-  keyboard.h/cpp    - PS/2 keyboard driver (IRQ1)
-  timer.h/cpp       - PIT timer driver (IRQ0)
-  multitasking.h/cpp - Task Control Block, Round-Robin scheduler
-  console.h/cpp     - VGA text mode console with scrolling
-  shell.h/cpp       - Interactive command shell
-  kernel.cpp        - Kernel entry, initialization, main loop
-linker.ld           - Kernel memory layout (1 MiB entry)
-Makefile            - Build, ISO, run, debug targets
-grub/grub.cfg       - GRUB bootloader menu
+  loader.s           - Multiboot header, 2MB stack, entry point
+  interruptstubs.s   - Low-level assembly ISR stubs (pusha/popa, iret, stack exchange)
+  types.h            - Fixed-width integer definitions
+  gdt.h / gdt.cpp    - Global Descriptor Table (Flat Ring 0)
+  port.h / port.cpp  - Hardware port I/O hierarchy (8/16/32-bit inline asm)
+  interrupts.h / cpp - 8259 PIC remapping, IDT gates, interrupt dispatcher
+  keyboard.h / cpp   - PS/2 keyboard controller driver (IRQ1, circular buffer)
+  timer.h / cpp      - 8254 PIT driver (IRQ0, Mode 2 Rate Generator at 100 Hz)
+  multitasking.h/cpp - Task Control Block, CPUState, Round-Robin scheduler
+  console.h / cpp    - 80x25 VGA driver, vertical scrolling, cursor control
+  shell.h / cpp      - Interactive command parser
+  kernel.cpp         - Kernel entry point, subsystem initialization, demo tasks
+scripts/
+  qemu_test.py       - Headless QEMU test harness with automated screendump
+docs/
+  screenshots/       - Captured QEMU demonstration screenshots
+linker.ld            - Linker layout (kernel at 1 MiB physical)
+Makefile             - Multi-target compilation and ISO generation
+ACADEMIC_REPORT.md   - Full B.Tech Academic Project Report and Viva Q&A
+PROGRESS_AND_TODO.md - Component verification matrix and evidence
 ```
-
-## How Context Switching Works
-
-1. PIT fires IRQ0 → CPU pushes `eflags`, `cs`, `eip` automatically
-2. `interruptstubs.s` pushes a dummy error code, then `pusha` (all GPRs), then segment registers
-3. Calls `InterruptManager::HandleInterrupt(interrupt_number, esp)`
-4. Timer handler calls `TaskManager::Schedule(esp)` which:
-   - Saves current task's `esp` into its TCB
-   - Selects next READY task (round-robin)
-   - Returns the new task's saved `esp`
-5. `interruptstubs.s` does `movl %eax, %esp` — now pointing at the new task's stack!
-6. Pops segment registers, `popa`, skips error code, `iret` → new task resumes execution
-
-## Limitations
-
-- All tasks run in kernel mode (Ring 0) — no user-mode isolation
-- No dynamic memory allocator (task stacks are statically allocated)
-- No filesystem, networking, or disk I/O
-- Maximum 16 concurrent tasks
-- No task termination (tasks run forever once created)
-- Single-core only

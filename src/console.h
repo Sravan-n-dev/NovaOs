@@ -3,9 +3,11 @@
 
 #include "types.h"
 
-// 80x25 VGA text mode
+// 80x25 VGA text mode: Rows 0..23 for interactive shell terminal,
+// Row 24 reserved as a dedicated hardware task monitor status bar.
 #define VGA_WIDTH  80
-#define VGA_HEIGHT 25
+#define VGA_HEIGHT 24
+#define VGA_TOTAL_HEIGHT 25
 #define VGA_MEMORY ((volatile uint16_t*)0xB8000)
 
 // Colors

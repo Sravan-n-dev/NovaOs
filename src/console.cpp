@@ -9,13 +9,13 @@ Console::Console()
 }
 
 void Console::scroll() {
-    // Move all lines up by one
+    // Scroll terminal region (rows 0 through VGA_HEIGHT - 1)
     for (int y = 0; y < VGA_HEIGHT - 1; y++) {
         for (int x = 0; x < VGA_WIDTH; x++) {
             VGA_MEMORY[y * VGA_WIDTH + x] = VGA_MEMORY[(y + 1) * VGA_WIDTH + x];
         }
     }
-    // Clear the last line
+    // Clear the bottom line of the scroll region
     for (int x = 0; x < VGA_WIDTH; x++) {
         VGA_MEMORY[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = ((uint16_t)color << 8) | ' ';
     }
@@ -32,7 +32,8 @@ void Console::updateHardwareCursor() {
 }
 
 void Console::clear() {
-    for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+    // Clear entire VGA frame buffer
+    for (int i = 0; i < VGA_WIDTH * VGA_TOTAL_HEIGHT; i++) {
         VGA_MEMORY[i] = ((uint16_t)color << 8) | ' ';
     }
     cursorX = 0;
