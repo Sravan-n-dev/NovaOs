@@ -43,11 +43,14 @@ NovaOS is an educational 32-bit x86 operating system developed following the inc
   - Installs GDT via `lgdt` instruction.
   - Exposes `CodeSegmentSelector()` and `DataSegmentSelector()` offsets.
 
-### Stage 5: Interrupt Descriptor Table (IDT) - Interface & Architecture (`src/interrupts.h`)
+### Stage 5: Interrupt Descriptor Table (IDT), 8259 PIC Remap & Interrupt Stubs (`src/interrupts.h`, `src/interrupts.cpp`, `src/interruptstubs.s`)
 - Defined WYOOS interrupt architecture:
   - `GateDescriptor` structure packed for x86 IDT entries (handler low/high 16 bits, code segment selector, access flags).
   - `InterruptHandler` base class for pluggable peripheral device handlers.
   - `InterruptManager`: Manages 256 IDT gates, master PIC (ports `0x20`/`0x21`) and slave PIC (ports `0xA0`/`0xA1`) remapping, and dispatching.
+  - `src/interruptstubs.s`: Assembly stubs for CPU exceptions 0x00-0x13, hardware IRQs 0x00-0x0F, register saving (`pusha`, segment registers), C++ invocation (`HandleInterrupt`), and stack pointer reloading for preemptive multitasking.
+  - `src/interrupts.cpp`: Complete 8259 PIC cascading initialization (ICW1-4), IDT gate registration, `lidt` activation, EOI signaling, and dispatch loop.
+  - `src/kernel.cpp`: Initialized GDT, IDT (offset 0x20), and enabled hardware interrupts with `sti`.
 
 ---
 
@@ -55,21 +58,7 @@ NovaOS is an educational 32-bit x86 operating system developed following the inc
 
 To complete NovaOS strictly following the prompt specifications and WYOOS architecture, implement the following components in order:
 
-### 1. Complete Stage 5: IDT Implementation & Interrupt Stubs
-- **`src/interruptstubs.s`:**
-  - Define entry stubs for CPU exceptions `0x00` through `0x13` (divide by zero, page fault, GPF, etc.).
-  - Define entry stubs for hardware IRQs `0x00` through `0x0F` (Timer IRQ0, Keyboard IRQ1, etc.).
-  - Push all registers (`pusha`, `%ds`, `%es`, `%fs`, `%gs`), push `%esp` as stack frame pointer.
-  - Call the C++ mangled symbol `_ZN16InterruptManager15HandleInterruptEhj` (`InterruptManager::HandleInterrupt(uint8_t, uint32_t)`).
-  - Move return value `%eax` to `%esp` (critical for multitasking context switching!).
-  - Pop segment registers, `popa`, clean stack, and execute `iret`.
-- **`src/interrupts.cpp`:**
-  - Implement 8259 PIC remapping (Master ICW1-ICW4 to base `0x20`, Slave to `0x28`).
-  - Initialize the 256 `GateDescriptor` entries pointing to stubs or `InterruptIgnore`.
-  - Load IDTR with `lidt`.
-  - Implement `HandleInterrupt` / `DoHandleInterrupt` acknowledging EOI (`0x20`) to Master/Slave PICs.
-
-### 2. Stage 6: Keyboard Driver
+### 1. Stage 6: Keyboard Driver
 - **`src/keyboard.h` & `src/keyboard.cpp`:**
   - Class `KeyboardDriver` inheriting from `InterruptHandler` (`interruptNumber = 0x21`).
   - Connects to PS/2 data port `0x60` and command/status port `0x64`.
@@ -77,7 +66,7 @@ To complete NovaOS strictly following the prompt specifications and WYOOS archit
   - Handles Shift, CapsLock, Enter, Backspace.
   - Buffers characters or forwards them to active Console/Shell.
 
-### 3. Stage 7: VGA Console & Interactive Command Shell
+### 2. Stage 7: VGA Console & Interactive Command Shell
 - **`src/console.h` & `src/console.cpp`:**
   - VGA text driver for 80x25 character grid at `0xB8000`.
   - Cursor tracking, screen scrolling on line 25 overflow, color attributes.
@@ -86,13 +75,13 @@ To complete NovaOS strictly following the prompt specifications and WYOOS archit
   - Interactive prompt `novaos> `.
   - Built-in commands: `help`, `clear`, `tasks`, `mem`, `sysinfo`, `reboot`.
 
-### 4. Stage 8: Timer Interrupt (PIT 8253/8254)
+### 3. Stage 8: Timer Interrupt (PIT 8253/8254)
 - **`src/timer.h` & `src/timer.cpp`:**
   - Channel 0 on port `0x40`, Mode/Command register on port `0x43`.
   - Set PIT frequency (e.g. 100 Hz or 1000 Hz).
   - Track kernel uptime / tick count.
 
-### 5. Stage 9 & 10: Task Management & Preemptive Round Robin Multitasking
+### 4. Stage 9 & 10: Task Management & Preemptive Round Robin Multitasking
 - **`src/multitasking.h` & `src/multitasking.cpp`:**
   - `CPUState` struct matching the stack layout saved by `interruptstubs.s` (`eax`, `ebx`, `ecx`, `edx`, `esi`, `edi`, `ebp`, `esp`, `eip`, `cs`, `eflags`, etc.).
   - `Task` class containing unique Task ID, 4 KiB stack, state (`RUNNING`, `READY`, `TERMINATED`), and pointer to saved `CPUState`.
@@ -103,20 +92,20 @@ To complete NovaOS strictly following the prompt specifications and WYOOS archit
     - Return next task's `cpuState` address as the new `esp`.
     - `interruptstubs.s` restores this `esp` and executes `iret`, switching tasks seamlessly!
 
-### 6. Stage 11: Dynamic Memory Management (Heap Allocation)
+### 5. Stage 11: Dynamic Memory Management (Heap Allocation)
 - **`src/memorymanagement.h` & `src/memorymanagement.cpp`:**
   - Simple memory manager tracking heap starting at e.g. 4 MiB or end of kernel binary.
   - `MemoryChunk` header structure: `size`, `allocated` (bool), `prev`, `next`.
   - Implement `malloc(size_t)` / `free(void*)`.
   - Overload global `operator new`, `operator new[]`, `operator delete`, `operator delete[]`.
 
-### 7. Stage 12: System Monitor
+### 6. Stage 12: System Monitor
 - Display live metrics queried from real kernel structures:
   - Kernel memory usage and free heap bytes from `MemoryManager`.
   - Active and ready task counts, current task ID from `TaskManager`.
   - Uptime and timer ticks.
 
-### 8. Stage 13: Academic Documentation & Viva Preparation
+### 7. Stage 13: Academic Documentation & Viva Preparation
 - Comprehensive documentation report covering:
   - Abstract, Problem Statement, Objectives, Architectural Blueprint.
   - Hardware Abstractions vs Theory (x86 ring model, segmentation vs paging, interrupt vectors, PIC vs APIC).

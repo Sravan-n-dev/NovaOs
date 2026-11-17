@@ -3,7 +3,12 @@ GPPFLAGS = -m32 -ffreestanding -fno-use-cxa-atexit -fno-exceptions -fno-rtti \
 ASFLAGS  = --32
 LDFLAGS  = -melf_i386 -T linker.ld
 
-objects = build/loader.o build/kernel.o
+objects = build/loader.o \
+          build/interruptstubs.o \
+          build/gdt.o \
+          build/port.o \
+          build/interrupts.o \
+          build/kernel.o
 
 build/%.o: src/%.cpp
 	@mkdir -p build
