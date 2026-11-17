@@ -20,6 +20,12 @@ TaskManager::TaskManager()
 TaskManager::~TaskManager() {}
 
 int TaskManager::CreateTask(TaskFunction entryPoint) {
+    // Critical Section: Save interrupt flags and disable interrupts
+    // to prevent the PIT timer from invoking Schedule() while a new task's
+    // context and TCB fields are being initialized.
+    uint32_t flags;
+    asm volatile("pushfl; popl %0; cli" : "=r"(flags));
+
     // Find a free slot (skip slot 0 which is the boot task)
     int slot = -1;
     for (int i = 1; i < MAX_TASKS; i++) {
@@ -28,12 +34,15 @@ int TaskManager::CreateTask(TaskFunction entryPoint) {
             break;
         }
     }
-    if (slot == -1) return -1;  // no free slots
+    if (slot == -1) {
+        // Restore interrupts before returning failure
+        asm volatile("pushl %0; popfl" : : "r"(flags));
+        return -1;
+    }
 
-    // Assign a unique task ID
+    // Assign a unique task ID (monotonically increasing)
     numTasksCreated++;
     tasks[slot].id = numTasksCreated;
-    tasks[slot].state = TASK_READY;
 
     // Set up the initial CPU context on this task's stack.
     // When the scheduler switches to this task, int_bottom will
@@ -63,8 +72,19 @@ int TaskManager::CreateTask(TaskFunction entryPoint) {
     state->fs = 0x18;
     state->gs = 0x18;
 
+    // Link fully constructed CPU state to task TCB
     tasks[slot].cpuState = state;
-    return tasks[slot].id;
+
+    // Atomically publish task as READY *only after* CPU context is complete.
+    // This guarantees Schedule() will never select an incomplete stack frame.
+    tasks[slot].state = TASK_READY;
+
+    int newId = tasks[slot].id;
+
+    // Restore previous interrupt state
+    asm volatile("pushl %0; popfl" : : "r"(flags));
+
+    return newId;
 }
 
 uint32_t TaskManager::Schedule(uint32_t esp) {
