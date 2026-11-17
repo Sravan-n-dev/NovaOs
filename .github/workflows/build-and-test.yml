@@ -1,0 +1,58 @@
+name: Build and Verify NovaOS in QEMU
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Toolchain and QEMU
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          g++-multilib \
+          make \
+          grub-pc-bin \
+          grub-common \
+          xorriso \
+          mtools \
+          qemu-system-x86 \
+          imagemagick \
+          python3
+
+    - name: Compile Kernel & Build Bootable ISO
+      run: |
+        make clean
+        make novaos.iso
+        ls -lh build/novaos.bin novaos.iso
+
+    - name: Verify Multiboot Compliance
+      run: |
+        grub-file --is-x86-multiboot build/novaos.bin
+        echo "Multiboot compliance check: PASSED"
+
+    - name: Execute NovaOS in QEMU & Verify Context Switching
+      run: |
+        chmod +x scripts/qemu_test.py
+        python3 scripts/qemu_test.py
+
+    - name: List Generated Test Artifacts & Screenshots
+      run: |
+        ls -la artifacts/
+
+    - name: Upload Build & Test Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: novaos-build-and-screenshots
+        path: |
+          novaos.iso
+          build/novaos.bin
+          artifacts/*
